@@ -1,0 +1,34 @@
+FROM {{ .fromAlpine }}
+
+RUN set -eux; \
+	apk add --no-cache postgresql{{ .old }}
+
+ENV PGBINOLD /usr/libexec/postgresql{{ .old }}
+ENV PGBINNEW /usr/local/bin
+
+{{
+	def dir($ver):
+		"/var/lib/postgresql/\($ver)/\(
+			# TODO swap 100% from /data to /docker (https://github.com/docker-library/postgres/pull/1259)
+			if IN($ver; "13", "14", "15", "16", "17") then
+				"data"
+			else
+				"docker"
+			end
+		)"
+-}}
+ENV PGDATAOLD {{ dir(.old) }}
+ENV PGDATANEW {{ dir(.new) }}
+
+RUN set -eux; \
+	mkdir -p "$PGDATAOLD" "$PGDATANEW"; \
+	chown -R postgres:postgres /var/lib/postgresql
+
+WORKDIR /var/lib/postgresql
+
+COPY docker-upgrade /usr/local/bin/
+
+ENTRYPOINT ["docker-upgrade"]
+
+# recommended: --link
+CMD ["pg_upgrade"]
